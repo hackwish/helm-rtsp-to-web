@@ -1,0 +1,213 @@
+---
+# Source: rtsp-to-web/templates/serviceaccount.yaml
+apiVersion: v1
+kind: ServiceAccount
+metadata:
+  name: rtsp-to-web
+  namespace: rtsp-to-web
+  labels:
+    helm.sh/chart: rtsp-to-web-0.1.0
+    app.kubernetes.io/name: rtsp-to-web
+    app.kubernetes.io/instance: rtsp-to-web
+    app.kubernetes.io/managed-by: Helm
+automountServiceAccountToken: true
+---
+# Source: rtsp-to-web/templates/configmap.yaml
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: rtsp-to-web-config
+  namespace: rtsp-to-web
+data:
+  config.json: |-
+    {
+      "server": {
+        "debug": true,
+        "log_level": "info",
+        "http_demo": true,
+        "http_debug": false,
+        "http_login": "demo",
+        "http_password": "demo",
+        "http_port": ":8083",
+        "ice_servers": ["stun:stun.l.google.com:19302"],
+        "rtsp_port": ":5541"
+      },
+      "streams": {
+        "demo1": {
+          "name": "test video stream 1",
+          "channels": {
+            "0": {
+              "name": "ch1",
+              "url": "rtsp://admin:admin@YOU_CAMERA_IP/uri",
+              "on_demand": true,
+              "debug": false,
+              "audio": true,
+              "status": 0
+            },
+            "1": {
+              "name": "ch2",
+              "url": "rtsp://admin:admin@YOU_CAMERA_IP/uri",
+              "on_demand": true,
+              "debug": false,
+              "audio": true,
+              "status": 0
+            }
+          }
+        },
+        "demo2": {
+          "name": "test video stream 2",
+          "channels": {
+            "0": {
+              "name": "ch1",
+              "url": "rtsp://admin:admin@YOU_CAMERA_IP/uri",
+              "on_demand": true,
+              "debug": false,
+              "status": 0
+            },
+            "1": {
+              "name": "ch2",
+              "url": "rtsp://admin:admin@YOU_CAMERA_IP/uri",
+              "on_demand": true,
+              "debug": false,
+              "status": 0
+            }
+          }
+        }
+      },
+      "channel_defaults": {
+        "on_demand": true
+      }
+    }
+---
+# Source: rtsp-to-web/templates/service.yaml
+apiVersion: v1
+kind: Service
+metadata:
+  name: rtsp-to-web
+  namespace: rtsp-to-web
+  labels:
+    helm.sh/chart: rtsp-to-web-0.1.0
+    app.kubernetes.io/name: rtsp-to-web
+    app.kubernetes.io/instance: rtsp-to-web
+    app.kubernetes.io/managed-by: Helm
+spec:
+  type: ClusterIP
+  ports:
+    - port: 8083
+      targetPort: http
+      protocol: TCP
+      name: http
+  selector:
+    app.kubernetes.io/name: rtsp-to-web
+    app.kubernetes.io/instance: rtsp-to-web
+---
+# Source: rtsp-to-web/templates/deployment.yaml
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: rtsp-to-web
+  namespace: rtsp-to-web
+  labels:
+    helm.sh/chart: rtsp-to-web-0.1.0
+    app.kubernetes.io/name: rtsp-to-web
+    app.kubernetes.io/instance: rtsp-to-web
+    app.kubernetes.io/managed-by: Helm
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app.kubernetes.io/name: rtsp-to-web
+      app.kubernetes.io/instance: rtsp-to-web
+  template:
+    metadata:
+      labels:
+        helm.sh/chart: rtsp-to-web-0.1.0
+        app.kubernetes.io/name: rtsp-to-web
+        app.kubernetes.io/instance: rtsp-to-web
+        app.kubernetes.io/managed-by: Helm
+    spec:
+      serviceAccountName: rtsp-to-web
+      securityContext:
+        {}
+      containers:
+        - name: rtsp-to-web
+          securityContext:
+            {}
+          image: "ghcr.io/deepch/rtsptoweb:latest"
+          imagePullPolicy: IfNotPresent
+          ports:
+            - name: http
+              containerPort: 8083
+              protocol: TCP
+          livenessProbe:
+            httpGet:
+              path: /
+              port: http
+          readinessProbe:
+            httpGet:
+              path: /
+              port: http
+          resources:
+            {}
+          volumeMounts:
+            - mountPath: /config
+              name: config
+              readOnly: true
+          env:
+            - name: SET_CONTAINER_TIMEZONE
+              value: "true"
+            - name: CONTAINER_TIMEZONE
+              value: America/Santiago
+            - name: TZ
+              value: America/Santiago
+      volumes:
+        - configMap:
+            items:
+            - key: config.json
+              path: config.json
+            name: app-config
+          name: config
+---
+# Source: rtsp-to-web/templates/ingress.yaml
+apiVersion: networking.k8s.io/v1
+kind: Ingress
+metadata:
+  name: rtsp-to-web
+  namespace: rtsp-to-web
+  labels:
+    helm.sh/chart: rtsp-to-web-0.1.0
+    app.kubernetes.io/name: rtsp-to-web
+    app.kubernetes.io/instance: rtsp-to-web
+    app.kubernetes.io/managed-by: Helm
+spec:
+  rules:
+    - host: "rtsp-to-web.local"
+      http:
+        paths:
+          - path: /
+            pathType: ImplementationSpecific
+            backend:
+              service:
+                name: rtsp-to-web
+                port:
+                  number: 8083
+---
+# Source: rtsp-to-web/templates/tests/test-connection.yaml
+apiVersion: v1
+kind: Pod
+metadata:
+  name: "rtsp-to-web-test-connection"
+  labels:
+    helm.sh/chart: rtsp-to-web-0.1.0
+    app.kubernetes.io/name: rtsp-to-web
+    app.kubernetes.io/instance: rtsp-to-web
+    app.kubernetes.io/managed-by: Helm
+  annotations:
+    "helm.sh/hook": test
+spec:
+  containers:
+    - name: wget
+      image: busybox
+      command: ['wget']
+      args: ['rtsp-to-web:8083']
+  restartPolicy: Never
