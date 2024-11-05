@@ -16,7 +16,7 @@ automountServiceAccountToken: true
 apiVersion: v1
 kind: ConfigMap
 metadata:
-  name: rtsp-to-web-config
+  name: app-config
   namespace: rtsp-to-web
 data:
   config.json: |-
@@ -91,7 +91,7 @@ metadata:
     app.kubernetes.io/instance: rtsp-to-web
     app.kubernetes.io/managed-by: Helm
 spec:
-  type: ClusterIP
+  type: NodePort
   ports:
     - port: 8083
       targetPort: http
@@ -185,7 +185,7 @@ spec:
       http:
         paths:
           - path: /
-            pathType: ImplementationSpecific
+            pathType: Prefix
             backend:
               service:
                 name: rtsp-to-web
